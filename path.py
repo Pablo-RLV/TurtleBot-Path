@@ -7,37 +7,30 @@ from tf_transformations import euler_from_quaternion
 import networkx as nx
 from networkx.algorithms import approximation as approx
 from math import *
+from collections import deque
 
-
-def Graph():
-    nodes = [(0,0,0), (1,2,2), (2,0,1)]
-    vn = [(0,0), (2,2), (0,1)]
-    WE = []
-    i = 1
-    for i in range(len(nodes)):
-        for j in range(i+1,len(nodes)):
-            weitgh = sqrt((nodes[i][1]-nodes[j][1])*(nodes[i][1]-nodes[j][1]) + (nodes[i][2]-nodes[j][2])*(nodes[i][2]-nodes[j][2]))
-            weitghEdge = (nodes[i][0], nodes[j][0], weitgh)
-            WE.append(weitghEdge)
-    G = nx.Graph()
-    G.add_nodes_from(nodes)
-    G.add_weighted_edges_from(WE)
-    return (G, vn, nodes)
-
+# Função para encontrar o melhor caminho passando por todos os nós
 def best_path_all_nodes(graph, source):
-    print(source)
+    # Encontrar um ciclo hamiltoniano aproximado usando o algoritmo Christofides
     cycle = approx.traveling_salesman_problem(graph)
+    # Construir o caminho começando no nó de origem
     path = [source]
+    # Adicionar os nós do ciclo após o nó de origem na ordem em que aparecem no ciclo
     for i in range (len(cycle)-cycle.index(source)):
         path.append(cycle[cycle.index(source)+i])
+    # Adicionar os nós do ciclo antes do nó de origem na ordem em que aparecem no ciclo
     for i in range (cycle.index(source)+1):
         path.append(cycle[i])
+    # Remover qualquer nó duplicado no caminho
     repeated = []
     for i in range (1,len(path)):
         if path[i-1] == path[i]:
             repeated.append(i-1)
     for i in repeated:
         path.pop(i)
+    # Transformar a lista em uma deque para otimizar as operações de remoção e adição de elementos
+    path = deque(path)
+    # Retornar o caminho
     return path
 
 class TurtleController(Node):
@@ -62,8 +55,8 @@ class TurtleController(Node):
     def move_turtle(self):
         nextPose = self.path[0]
         self.pose_subscription.callback
-        dx = self.currentPose[0]-nextPose.x
-        dy = self.currentPose[1]-nextPose.y
+        dx = self.currentPose[0]-nextPose[0]
+        dy = self.currentPose[1]-nextPose[1]
         ang = atan2(dy,dx)-self.currentPose[2]
         direction = ang/abs(ang)
         if self.angleSet == False:
@@ -94,10 +87,14 @@ class TurtleController(Node):
         self.currentPose = [x,y,theta]
 
 def main(args=None):
-    G = Graph()
-    graph = G[0]
-    nodes = G[2]
-    path = best_path_all_nodes(graph, nodes[0])
+    # Definir os nós e as arestas do grafo
+    nodes = [1,2,3]
+    WE = [(1,2,1),(1,3,1),(2,4,1)]
+    # Criar o grafo
+    G = nx.Graph()
+    G.add_nodes_from(nodes)
+    G.add_weighted_edges_from(WE)
+    path = best_path_all_nodes(G, nodes[0])
     rclpy.init()
     turtle_controller = TurtleController(path)
     rclpy.spin(turtle_controller)
