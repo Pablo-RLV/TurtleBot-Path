@@ -2,105 +2,66 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry as Odometry
 from tf_transformations import euler_from_quaternion
-import networkx as nx
-from networkx.algorithms import approximation as approx
-from math import *
-from collections import deque
+import math
 
-# Função para encontrar o melhor caminho passando por todos os nós
-def best_path_all_nodes(graph, source):
-    # Encontrar um ciclo hamiltoniano aproximado usando o algoritmo Christofides
-    cycle = approx.traveling_salesman_problem(graph)
-    # Construir o caminho começando no nó de origem
-    path = [source]
-    # Adicionar os nós do ciclo após o nó de origem na ordem em que aparecem no ciclo
-    for i in range (len(cycle)-cycle.index(source)):
-        path.append(cycle[cycle.index(source)+i])
-    # Adicionar os nós do ciclo antes do nó de origem na ordem em que aparecem no ciclo
-    for i in range (cycle.index(source)+1):
-        path.append(cycle[i])
-    # Remover qualquer nó duplicado no caminho
-    repeated = []
-    for i in range (1,len(path)):
-        if path[i-1] == path[i]:
-            repeated.append(i-1)
-    for i in repeated:
-        path.pop(i)
-    # Transformar a lista em uma deque para otimizar as operações de remoção e adição de elementos
-    path = deque(path)
-    # Retornar o caminho
-    return path
 
-class TurtleController(Node):
-    currentPose = []
-    angleSet = False
-    def __init__(self,path):
-        self.path = path
-        super().__init__('turtle_controller')
-        self.publisher_ = self.create_publisher(
-            msg_type=Twist, 
-            topic='cmd_vel',
-            qos_profile=10
-        )
-        self.pose_subscription = self.create_subscription(
-            msg_type=Odometry,
-            topic='/odom',
-            callback=self.pose_callback,
-            qos_profile=10
-        )
-        self.timer_ = self.create_timer(0.1, self.move_turtle)
-        self.twist_msg_ = Twist()
-    def move_turtle(self):
-        nextPose = self.path[0]
-        self.pose_subscription.callback
-        dx = self.currentPose[0]-nextPose[0]
-        dy = self.currentPose[1]-nextPose[1]
-        ang = atan2(dy,dx)-self.currentPose[2]
-        direction = ang/abs(ang)
-        if self.angleSet == False:
-            if abs(dx)<0.1 or abs(dy)<0.1:
-                self.path.pop(0)
-                return
-            if abs(ang) > 0.01:
-                self.twist_msg_.linear.x = 0.0
-                self.twist_msg_.angular.z = 0.1*direction
-            else:
-                self.twist_msg_.angular.z = 0.0
-                self.angleSet = True
-        if self.angleSet:
-            if abs(dx)>0.1 or abs(dy)>0.1:
-                self.twist_msg_.linear.x = -0.1
-            else:
-                self.twist_msg_.linear.x = 0.0
-                self.path.pop(0)
-                self.angleSet = False
-        self.publisher_.publish(self.twist_msg_)
+class TurtleController(Node):    
+    def __init__(self, control_period=0.05):
+        super().__init__('turtlecontroller')
+        self.precision = 0.1 #precisão do robô
+        self.odometry = Odometry()
+        self.position = [2.0, 2.0, 1.0, 0.0] #array de posições
+        self.index = 0 #index que vamos utilizar na lista
+        self.contador = 0 #número de pontos percorridos
+        self.set_point_x = self.position[self.index] #ponto x que o robô deve ir
+        self.set_point_y = self.position[self.index + 1] #ponto y que o robô deve ir
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10) #publisher para o tópico cmd_vel
+        self.subscription = self.create_subscription(Odometry, '/odom', self.pose_callback, 10) #subscriber para o tópico odom
+        self.control_timer = self.create_timer(timer_period_sec = control_period, callback = self.control_callback) #timer para o controle
+
     def pose_callback(self, msg):
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        z = msg.pose.pose.position.z
-        ang = msg.pose.pose.orientation
-        _, _, theta = euler_from_quaternion([ang.x, ang.y, ang.z, ang.w])
-        self.get_logger().info(f"x={x}, y={y}, theta={theta}")
-        self.currentPose = [x,y,theta]
+        position_x = msg.pose.pose.position.x #posição x do robô
+        position_y = msg.pose.pose.position.y #posição y do robô
+        angle = msg.pose.pose.orientation #ângulo do robô
+        _, _, self.theta = euler_from_quaternion([angle.x, angle.y, angle.z, angle.w])
+        self.actual_pose_x = position_x #posição x atual do robô
+        self.actual_pose_y = position_y #posição y atual do robô
+
+    def control_callback(self):
+        msg = Twist()
+        self.set_point_x = self.position[self.index]
+        self.set_point_y = self.position[self.index + 1]
+        x_difference = self.set_point_x - self.actual_pose_x #diferença entre o ponto x que o robô deve ir e o ponto x atual do robô
+        y_difference = self.set_point_y - self.actual_pose_y #diferença entre o ponto y que o robô deve ir e o ponto y atual do robô
+        angle = math.atan2(y_difference, x_difference)
+        theta_difference = angle - self.theta #diferença entre o ângulo que o robô deve estar e o ângulo atual do robô
+        if abs(x_difference) <= self.precision and abs(y_difference) <= self.precision: 
+            if self.contador == 1: #se o robô já passou por todos os pontos
+                msg.linear.x = 0.0
+                msg.angular.z = 0.0
+                self.publisher.publish(msg)
+                exit()
+            else:
+                self.index = 2 #atualiza o index
+                self.contador = 1 #incrementa o contador
+        if abs(theta_difference) >= (self.precision -0.05):
+            msg.linear.x = 0.0
+            if theta_difference > 0:
+                msg.angular.z = 0.2
+            else:
+                msg.angular.z = -0.2
+        elif abs(x_difference) >= self.precision:
+            msg.linear.x = 0.2
+        self.publisher.publish(msg)
 
 def main(args=None):
-    # Definir os nós e as arestas do grafo
-    nodes = [1,2,3]
-    WE = [(1,2,1),(1,3,1),(2,4,1)]
-    # Criar o grafo
-    G = nx.Graph()
-    G.add_nodes_from(nodes)
-    G.add_weighted_edges_from(WE)
-    path = best_path_all_nodes(G, nodes[0])
-    rclpy.init()
-    turtle_controller = TurtleController(path)
-    rclpy.spin(turtle_controller)
-    turtle_controller.destroy_node()
+    rclpy.init(args=args)
+    turtle = TurtleController()
+    rclpy.spin(turtle)
+    turtle.destroy_node()
     rclpy.shutdown()
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
