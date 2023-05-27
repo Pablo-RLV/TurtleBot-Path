@@ -28,6 +28,9 @@ Posteriormente, basta executar o comando:
 ./path.py
 ```
 
+Alternativamente, podemos também construir um pacote, através dos seguintes passos:
+
+
 ## Demonstração
 
 <https://youtu.be/lnpE4Te1KGQ>
