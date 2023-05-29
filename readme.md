@@ -6,7 +6,34 @@ A movimentação do objeto é feito através de mensagens do tipo Twist, pela ut
 
 Para mover o robô até um ponto específico, é necessário perceber qual é a sua posição atual e calcular o ângulo que ele deve rotacionar em torno do próprio eixo para traçar uma trajetória retilínea até o ponto desejado. Dessa forma, podemos mover o robô até onde desejamos.
 
-## Execução
+## Execução a partir do pacote
+
+Para executar essa simulação, é necessária a instalação prévia do ROS-Humble e do Gazebo.
+
+Após isso, basta executar o comando:
+
+```bash
+roslaunch turtlebot3_gazebo turtlebot3_world.launch
+```
+
+Para buildar o pacote, basta executar o comando:
+
+```bash
+colcon build
+source install/setup.sh
+colcon build --packages-select path
+source install/setup.sh
+```
+
+Observação: o comando install/setup.sh pode ser modificado para install/setup.bashrc, caso seja necessário.
+
+Posteriormente, basta executar o comando:
+
+```bash
+ros2 run path path
+```
+
+## Execução partir do script
 
 Para executar essa simulação, é necessária a instalação prévia do ROS-Humble e do Gazebo.
 
@@ -28,9 +55,6 @@ Posteriormente, basta executar o comando:
 ./path.py
 ```
 
-Alternativamente, podemos também construir um pacote, através dos seguintes passos:
-
-
 ## Demonstração
 
-<https://youtu.be/lnpE4Te1KGQ>
+**Youtube sem pacote:** <https://youtu.be/lnpE4Te1KGQ>
